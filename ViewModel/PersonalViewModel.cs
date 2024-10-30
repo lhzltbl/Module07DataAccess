@@ -12,10 +12,10 @@ using System.Windows.Input;
 
 namespace Module07DataAccess.ViewModel
 {
-    public class PersonalViewModel:INotifyPropertyChanged
+    public class PersonalViewModel : INotifyPropertyChanged
     {
         private readonly PersonalService _personalService;
-        public ObservableCollection<Personal>PersonalList { get; set; }
+        public ObservableCollection<Personal> PersonalList { get; set; }
 
         private bool _isBusy;
         public bool IsBusy
@@ -24,6 +24,39 @@ namespace Module07DataAccess.ViewModel
             set
             {
                 _isBusy = value;
+                OnPropertyChanged();
+            }
+        }
+
+        private Personal _selectedPersonal;
+        public Personal SelectedPersonal
+        {
+            get => _selectedPersonal;
+            set
+            {
+                _selectedPersonal = value;
+                if (_selectedPersonal != null)
+                {
+                    NewPersonalName = _selectedPersonal.Name;
+                    NewPersonalGender = _selectedPersonal.Gender;
+                    NewPersonalContactNo = _selectedPersonal.ContactNo;
+                    IsPersonSelected = true;
+                }
+                else
+                {
+                    IsPersonSelected = false;
+                }
+                OnPropertyChanged();
+            }
+        }
+
+        private bool _IsPersonSelected;
+        public bool IsPersonSelected
+        {
+            get => _IsPersonSelected;
+            set
+            {
+                _IsPersonSelected = value;
                 OnPropertyChanged();
             }
         }
@@ -40,7 +73,44 @@ namespace Module07DataAccess.ViewModel
             }
         }
 
+        //New Personal entry for name, gender, contact no
+        private string _newPersonalName;
+        public string NewPersonalName
+        {
+            get => _newPersonalName;
+            set
+            {
+                _newPersonalName = value;
+                OnPropertyChanged();
+            }
+        }
+
+        private string _newPersonalGender;
+        public string NewPersonalGender
+        {
+            get => _newPersonalGender;
+            set
+            {
+                _newPersonalGender = value;
+                OnPropertyChanged();
+            }
+        }
+
+        private string _newPersonalContactNo;
+        public string NewPersonalContactNo
+        {
+            get => _newPersonalContactNo;
+            set
+            {
+                _newPersonalContactNo = value;
+                OnPropertyChanged();
+            }
+        }
+
         public ICommand LoadDataCommand { get; }
+        public ICommand AddPersonalCommand { get; }
+        public ICommand SelectedPersonCommand { get; }
+        public ICommand DeletePersonalCommand { get; }
 
         //PersonalViewModel Constructor
 
@@ -49,6 +119,11 @@ namespace Module07DataAccess.ViewModel
             _personalService = new PersonalService();
             PersonalList = new ObservableCollection<Personal>();
             LoadDataCommand = new Command(async () => await LoadData());
+            AddPersonalCommand = new Command(async()=> await AddPerson());
+            SelectedPersonCommand = new Command<Personal>(person => SelectedPersonal = person);
+            DeletePersonalCommand = new Command(async() =>
+                                    await DeletePersonal(),
+                                    () => SelectedPersonal != null);
 
             LoadData();
         }
@@ -75,6 +150,76 @@ namespace Module07DataAccess.ViewModel
             finally
             {
                 IsBusy = false;
+            }
+        }
+
+        private async Task AddPerson()
+        {
+            if (IsBusy || string.IsNullOrWhiteSpace(NewPersonalName) || string.IsNullOrWhiteSpace(NewPersonalGender) || string.IsNullOrWhiteSpace(NewPersonalContactNo))
+            {
+                StatusMessage = "Please fill in all fields before adding";
+                return;
+            }
+            IsBusy = true;
+            StatusMessage = "Adding new person...";
+
+            try
+            {
+                var newPerson = new Personal
+                {
+                    Name = NewPersonalName,
+                    Gender = NewPersonalGender,
+                    ContactNo = NewPersonalContactNo
+                };
+                var isSuccess = await _personalService.AddPersonalAsync(newPerson);
+                if (isSuccess)
+                {
+                    NewPersonalName = string.Empty;
+                    NewPersonalGender = string.Empty;
+                    NewPersonalContactNo = string.Empty;
+                    StatusMessage = "New person added successfully!";
+                }
+                else
+                {
+                    StatusMessage = "Failed to add the new person!";
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Failed adding person: {ex.Message}";
+            }
+            finally
+            {
+                IsBusy = false;
+                await LoadData();
+            }
+        }
+
+
+        private async Task DeletePersonal()
+        {
+            if (SelectedPersonal == null) return;
+            var answer = await Application.Current.MainPage.DisplayAlert("Confirm Delete", $"Are you sure you wnt to delete {SelectedPersonal.Name}?",
+                "Yes", "No");
+
+            if (!answer) return;
+
+            IsBusy = true;
+            StatusMessage = "Deleting person...";
+            try
+            {
+                var success = await _personalService.DeletePersonalAsync(SelectedPersonal.ID);
+                StatusMessage = success ? "Person deleted successfully" : "Failoed to delete person.";
+
+                if (success)
+                {
+                    PersonalList.Remove(SelectedPersonal);
+                    SelectedPersonal = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error deleting person: {ex.Message}";
             }
         }
 
